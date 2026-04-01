@@ -1,0 +1,6 @@
+dataset/
+runs/
+*.pt
+__pycache__/
+venv/
+voice_cache/
