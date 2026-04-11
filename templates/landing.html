@@ -1,0 +1,1139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SignDetect — Neural Traffic Vision</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --acid: #c8ff00;
+            --acid-dim: #8fb800;
+            --cyan: #00e5ff;
+            --red: #ff2244;
+            --bg: #05060a;
+            --bg2: #090c12;
+            --surface: #0d1220;
+            --border: #1a2535;
+            --text: #d0dff0;
+            --muted: #3a5070;
+        }
+
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 400;
+            overflow-x: hidden;
+            cursor: none;
+        }
+
+        /* Custom cursor */
+        .cursor {
+            position: fixed;
+            width: 12px;
+            height: 12px;
+            background: var(--acid);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 9999;
+            transform: translate(-50%, -50%);
+            transition: transform 0.1s, width 0.2s, height 0.2s;
+            mix-blend-mode: difference;
+        }
+
+        .cursor-ring {
+            position: fixed;
+            width: 36px;
+            height: 36px;
+            border: 1px solid var(--acid);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 9998;
+            transform: translate(-50%, -50%);
+            transition: transform 0.15s ease-out, width 0.3s, height 0.3s, opacity 0.3s;
+            opacity: 0.5;
+        }
+
+        /* ===================== NOISE OVERLAY ===================== */
+        .noise {
+            position: fixed;
+            inset: 0;
+            z-index: 1;
+            pointer-events: none;
+            opacity: 0.025;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+            background-repeat: repeat;
+            background-size: 256px 256px;
+        }
+
+        /* ===================== NAV ===================== */
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 20px 60px;
+            backdrop-filter: blur(20px);
+            background: rgba(5,6,10,0.8);
+            border-bottom: 1px solid rgba(200,255,0,0.08);
+        }
+
+        .nav-logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+        }
+
+        .nav-logo-mark {
+            width: 32px;
+            height: 32px;
+            position: relative;
+        }
+
+        .nav-logo-mark svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .nav-brand {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.9rem;
+            font-weight: 900;
+            color: var(--acid);
+            letter-spacing: 3px;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 40px;
+            list-style: none;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: var(--muted);
+            font-size: 0.8rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover { color: var(--acid); }
+
+        .nav-cta {
+            padding: 10px 24px;
+            border: 1px solid var(--acid);
+            color: var(--acid) !important;
+            border-radius: 2px;
+            font-family: 'Orbitron', sans-serif !important;
+            font-size: 0.65rem !important;
+            font-weight: 700 !important;
+            letter-spacing: 2px !important;
+            transition: all 0.2s !important;
+        }
+
+        .nav-cta:hover {
+            background: var(--acid) !important;
+            color: var(--bg) !important;
+            box-shadow: 0 0 30px rgba(200,255,0,0.3) !important;
+        }
+
+        /* ===================== HERO ===================== */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            position: relative;
+            padding: 120px 60px 80px;
+            overflow: hidden;
+        }
+
+        /* Animated radar background */
+        .radar-bg {
+            position: absolute;
+            right: -100px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 700px;
+            height: 700px;
+            opacity: 0.12;
+            pointer-events: none;
+        }
+
+        .radar-circle {
+            position: absolute;
+            border: 1px solid var(--acid);
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .radar-circle:nth-child(1) { width: 140px; height: 140px; animation: radar-pulse 3s ease-out infinite; }
+        .radar-circle:nth-child(2) { width: 280px; height: 280px; animation: radar-pulse 3s ease-out 0.5s infinite; }
+        .radar-circle:nth-child(3) { width: 420px; height: 420px; animation: radar-pulse 3s ease-out 1s infinite; }
+        .radar-circle:nth-child(4) { width: 560px; height: 560px; animation: radar-pulse 3s ease-out 1.5s infinite; }
+        .radar-circle:nth-child(5) { width: 700px; height: 700px; animation: radar-pulse 3s ease-out 2s infinite; }
+
+        @keyframes radar-pulse {
+            0% { opacity: 0.8; }
+            100% { opacity: 0; }
+        }
+
+        .radar-sweep {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 350px;
+            height: 350px;
+            transform-origin: 0 0;
+            animation: sweep 4s linear infinite;
+        }
+
+        @keyframes sweep {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .radar-sweep::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 350px;
+            height: 350px;
+            background: conic-gradient(from 0deg, transparent 270deg, rgba(200,255,0,0.3) 360deg);
+            border-radius: 0 100% 0 0;
+        }
+
+        /* Cross hairs */
+        .radar-cross {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 700px;
+            height: 700px;
+        }
+
+        .radar-cross::before,
+        .radar-cross::after {
+            content: '';
+            position: absolute;
+            background: rgba(200,255,0,0.2);
+        }
+
+        .radar-cross::before {
+            width: 1px;
+            height: 100%;
+            left: 50%;
+        }
+
+        .radar-cross::after {
+            height: 1px;
+            width: 100%;
+            top: 50%;
+        }
+
+        /* Hero content */
+        .hero-content {
+            position: relative;
+            z-index: 2;
+            max-width: 680px;
+        }
+
+        .hero-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            border: 1px solid rgba(200,255,0,0.3);
+            border-radius: 2px;
+            font-size: 0.7rem;
+            letter-spacing: 3px;
+            color: var(--acid);
+            text-transform: uppercase;
+            margin-bottom: 32px;
+            animation: fade-up 0.6s ease both;
+        }
+
+        .hero-tag-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--acid);
+            border-radius: 50%;
+            animation: blink 1.5s ease-in-out infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.2; }
+        }
+
+        h1.hero-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: clamp(2.8rem, 5vw, 5rem);
+            font-weight: 900;
+            line-height: 1.05;
+            letter-spacing: -1px;
+            margin-bottom: 24px;
+            animation: fade-up 0.6s 0.1s ease both;
+        }
+
+        .hero-title .line1 { color: var(--text); display: block; }
+        .hero-title .line2 {
+            color: var(--acid);
+            display: block;
+            text-shadow: 0 0 40px rgba(200,255,0,0.4);
+        }
+
+        .hero-desc {
+            font-size: 1.1rem;
+            line-height: 1.7;
+            color: var(--muted);
+            max-width: 520px;
+            margin-bottom: 48px;
+            font-weight: 300;
+            animation: fade-up 0.6s 0.2s ease both;
+        }
+
+        .hero-actions {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            animation: fade-up 0.6s 0.3s ease both;
+        }
+
+        .btn-primary {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 16px 36px;
+            background: var(--acid);
+            color: var(--bg);
+            text-decoration: none;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            border-radius: 2px;
+            transition: all 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-primary::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: rgba(255,255,255,0.2);
+            transform: translateX(-100%);
+            transition: transform 0.3s;
+        }
+
+        .btn-primary:hover::before { transform: translateX(0); }
+        .btn-primary:hover { box-shadow: 0 0 40px rgba(200,255,0,0.5), 0 0 80px rgba(200,255,0,0.2); }
+
+        .btn-secondary {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 16px 36px;
+            border: 1px solid var(--border);
+            color: var(--text);
+            text-decoration: none;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            border-radius: 2px;
+            transition: all 0.2s;
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--acid);
+            color: var(--acid);
+        }
+
+        /* Scroll indicator */
+        .scroll-hint {
+            position: absolute;
+            bottom: 40px;
+            left: 60px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.65rem;
+            letter-spacing: 3px;
+            color: var(--muted);
+            text-transform: uppercase;
+            animation: fade-up 0.6s 0.8s ease both;
+        }
+
+        .scroll-line {
+            width: 40px;
+            height: 1px;
+            background: var(--muted);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .scroll-line::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: var(--acid);
+            transform: translateX(-100%);
+            animation: scroll-line-anim 2s ease-in-out infinite;
+        }
+
+        @keyframes scroll-line-anim {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        /* Hero stats strip */
+        .hero-stats {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            border-top: 1px solid var(--border);
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            animation: fade-up 0.6s 0.5s ease both;
+        }
+
+        .hero-stat {
+            padding: 24px 40px;
+            border-right: 1px solid var(--border);
+        }
+
+        .hero-stat:last-child { border-right: none; }
+
+        .hero-stat-val {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.8rem;
+            font-weight: 900;
+            color: var(--acid);
+            line-height: 1;
+            margin-bottom: 4px;
+        }
+
+        .hero-stat-label {
+            font-size: 0.7rem;
+            letter-spacing: 2px;
+            color: var(--muted);
+            text-transform: uppercase;
+        }
+
+        @keyframes fade-up {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ===================== DIVIDER ===================== */
+        .section-divider {
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--border), transparent);
+            margin: 0;
+        }
+
+        /* ===================== FEATURES ===================== */
+        section {
+            padding: 100px 60px;
+            position: relative;
+        }
+
+        .section-label {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            font-size: 0.65rem;
+            letter-spacing: 4px;
+            color: var(--acid);
+            text-transform: uppercase;
+            margin-bottom: 20px;
+        }
+
+        .section-label::before {
+            content: '';
+            width: 30px;
+            height: 1px;
+            background: var(--acid);
+        }
+
+        .section-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: clamp(1.6rem, 3vw, 2.4rem);
+            font-weight: 700;
+            line-height: 1.2;
+            margin-bottom: 60px;
+            max-width: 500px;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1px;
+            background: var(--border);
+            border: 1px solid var(--border);
+        }
+
+        .feature-card {
+            background: var(--bg2);
+            padding: 40px 36px;
+            position: relative;
+            overflow: hidden;
+            transition: background 0.3s;
+        }
+
+        .feature-card:hover { background: var(--surface); }
+
+        .feature-card::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--acid);
+            transform: scaleX(0);
+            transform-origin: left;
+            transition: transform 0.3s;
+        }
+
+        .feature-card:hover::after { transform: scaleX(1); }
+
+        .feature-icon {
+            width: 48px;
+            height: 48px;
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 24px;
+            font-size: 1.2rem;
+            color: var(--acid);
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+
+        .feature-card:hover .feature-icon {
+            border-color: var(--acid);
+            box-shadow: 0 0 20px rgba(200,255,0,0.2);
+        }
+
+        .feature-num {
+            position: absolute;
+            top: 20px;
+            right: 24px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.6rem;
+            color: var(--border);
+            letter-spacing: 2px;
+        }
+
+        .feature-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: var(--text);
+            margin-bottom: 12px;
+            letter-spacing: 1px;
+        }
+
+        .feature-desc {
+            font-size: 0.9rem;
+            line-height: 1.7;
+            color: var(--muted);
+            font-weight: 300;
+        }
+
+        /* ===================== SIGNS SHOWCASE ===================== */
+        .signs-section {
+            background: var(--bg2);
+        }
+
+        .signs-marquee-wrap {
+            overflow: hidden;
+            margin: 0 -60px;
+            padding: 0 60px;
+        }
+
+        .signs-row {
+            display: flex;
+            gap: 12px;
+            animation: marquee 30s linear infinite;
+            width: max-content;
+        }
+
+        .signs-row.reverse {
+            animation: marquee-reverse 35s linear infinite;
+            margin-top: 12px;
+        }
+
+        @keyframes marquee {
+            from { transform: translateX(0); }
+            to { transform: translateX(-50%); }
+        }
+
+        @keyframes marquee-reverse {
+            from { transform: translateX(-50%); }
+            to { transform: translateX(0); }
+        }
+
+        .sign-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 18px;
+            border: 1px solid var(--border);
+            border-radius: 2px;
+            white-space: nowrap;
+            font-size: 0.75rem;
+            letter-spacing: 1px;
+            color: var(--text);
+            background: var(--surface);
+            transition: all 0.2s;
+        }
+
+        .sign-chip-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+        }
+
+        .sign-chip.warning .sign-chip-dot { background: var(--acid); }
+        .sign-chip.danger .sign-chip-dot { background: var(--red); }
+        .sign-chip.info .sign-chip-dot { background: var(--cyan); }
+
+        /* ===================== HOW IT WORKS ===================== */
+        .steps-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0;
+            position: relative;
+        }
+
+        .steps-grid::before {
+            content: '';
+            position: absolute;
+            top: 32px;
+            left: 12%;
+            right: 12%;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--border), var(--border), transparent);
+        }
+
+        .step {
+            padding: 0 24px;
+            text-align: center;
+        }
+
+        .step-number {
+            width: 64px;
+            height: 64px;
+            border: 1px solid var(--border);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1rem;
+            font-weight: 900;
+            color: var(--acid);
+            margin: 0 auto 24px;
+            background: var(--bg);
+            position: relative;
+            z-index: 1;
+            transition: all 0.3s;
+        }
+
+        .step:hover .step-number {
+            border-color: var(--acid);
+            box-shadow: 0 0 30px rgba(200,255,0,0.3);
+        }
+
+        .step-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.75rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+            letter-spacing: 1px;
+        }
+
+        .step-desc {
+            font-size: 0.85rem;
+            line-height: 1.6;
+            color: var(--muted);
+            font-weight: 300;
+        }
+
+        /* ===================== TECH STACK ===================== */
+        .tech-section {
+            background: var(--bg2);
+        }
+
+        .tech-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 1px;
+            background: var(--border);
+            border: 1px solid var(--border);
+        }
+
+        .tech-item {
+            background: var(--bg2);
+            padding: 32px 20px;
+            text-align: center;
+            transition: background 0.2s;
+        }
+
+        .tech-item:hover { background: var(--surface); }
+
+        .tech-name {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.65rem;
+            font-weight: 700;
+            color: var(--text);
+            letter-spacing: 2px;
+            margin-bottom: 6px;
+        }
+
+        .tech-desc {
+            font-size: 0.7rem;
+            color: var(--muted);
+        }
+
+        .tech-icon {
+            font-size: 1.5rem;
+            margin-bottom: 12px;
+            display: block;
+        }
+
+        /* ===================== CTA SECTION ===================== */
+        .cta-section {
+            text-align: center;
+            padding: 120px 60px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .cta-glow {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(200,255,0,0.06) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .cta-section h2 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: clamp(2rem, 4vw, 3.5rem);
+            font-weight: 900;
+            line-height: 1.1;
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .cta-section p {
+            font-size: 1rem;
+            color: var(--muted);
+            margin-bottom: 48px;
+            font-weight: 300;
+        }
+
+        /* ===================== FOOTER ===================== */
+        footer {
+            border-top: 1px solid var(--border);
+            padding: 40px 60px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .footer-brand {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.75rem;
+            font-weight: 900;
+            color: var(--acid);
+            letter-spacing: 3px;
+        }
+
+        .footer-note {
+            font-size: 0.7rem;
+            color: var(--muted);
+            letter-spacing: 1px;
+        }
+
+        /* Scroll reveal */
+        .reveal {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.7s ease, transform 0.7s ease;
+        }
+
+        .reveal.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+
+<!-- Custom cursor -->
+<div class="cursor" id="cursor"></div>
+<div class="cursor-ring" id="cursorRing"></div>
+<div class="noise"></div>
+
+<!-- NAV -->
+<nav>
+    <a href="#" class="nav-logo">
+        <div class="nav-logo-mark">
+            <svg viewBox="0 0 32 32" fill="none">
+                <polygon points="16,2 30,10 30,22 16,30 2,22 2,10" stroke="#c8ff00" stroke-width="1.5" fill="none"/>
+                <polygon points="16,8 24,12 24,20 16,24 8,20 8,12" stroke="#c8ff00" stroke-width="0.5" fill="rgba(200,255,0,0.05)"/>
+                <circle cx="16" cy="16" r="3" fill="#c8ff00"/>
+            </svg>
+        </div>
+        <span class="nav-brand">SignDetect</span>
+    </a>
+    <ul class="nav-links">
+        <li><a href="#features">Features</a></li>
+        <li><a href="#how">How It Works</a></li>
+        <li><a href="#signs">Sign Classes</a></li>
+        <li><a href="/dashboard" class="nav-cta">Launch App</a></li>
+    </ul>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+    <!-- Radar BG -->
+    <div class="radar-bg">
+        <div class="radar-circle"></div>
+        <div class="radar-circle"></div>
+        <div class="radar-circle"></div>
+        <div class="radar-circle"></div>
+        <div class="radar-circle"></div>
+        <div class="radar-cross"></div>
+        <div class="radar-sweep"></div>
+    </div>
+
+    <div class="hero-content">
+        <div class="hero-tag">
+            <span class="hero-tag-dot"></span>
+            Neural Vision System · Real-Time
+        </div>
+
+        <h1 class="hero-title">
+            <span class="line1">Intelligent</span>
+            <span class="line2">Traffic Sign<br>Detection</span>
+        </h1>
+
+        <p class="hero-desc">
+            Real-time traffic sign recognition powered by YOLOv8 neural networks.
+            Detects 25 sign classes with voice alerts, high-confidence filtering,
+            and live FPS monitoring — built for the road.
+        </p>
+
+        <div class="hero-actions">
+            <a href="/dashboard" class="btn-primary">
+                <span>▶</span> Launch Detection
+            </a>
+            <a href="#features" class="btn-secondary">
+                <span>↓</span> Learn More
+            </a>
+        </div>
+    </div>
+
+    <div class="scroll-hint">
+        <div class="scroll-line"></div>
+        Scroll to explore
+    </div>
+
+    <div class="hero-stats">
+        <div class="hero-stat">
+            <div class="hero-stat-val">25</div>
+            <div class="hero-stat-label">Sign Classes</div>
+        </div>
+        <div class="hero-stat">
+            <div class="hero-stat-val">1024</div>
+            <div class="hero-stat-label">Image Resolution</div>
+        </div>
+        <div class="hero-stat">
+            <div class="hero-stat-val">FP16</div>
+            <div class="hero-stat-label">Inference Mode</div>
+        </div>
+        <div class="hero-stat">
+            <div class="hero-stat-val">~20fps</div>
+            <div class="hero-stat-label">RTX 3060+</div>
+        </div>
+    </div>
+</section>
+
+<!-- FEATURES -->
+<section id="features">
+    <div class="section-label">Capabilities</div>
+    <h2 class="section-title reveal">Everything you need for road sign intelligence</h2>
+
+    <div class="features-grid reveal">
+        <div class="feature-card">
+            <span class="feature-num">01</span>
+            <div class="feature-icon">◈</div>
+            <div class="feature-title">Real-Time Detection</div>
+            <p class="feature-desc">YOLOv8 inference at 1024px resolution with FP16 precision. Detects signs frame-by-frame from live webcam feed with bounding boxes and confidence scores.</p>
+        </div>
+        <div class="feature-card">
+            <span class="feature-num">02</span>
+            <div class="feature-icon">♪</div>
+            <div class="feature-title">Voice Alerts</div>
+            <p class="feature-desc">High-confidence detections (≥0.75) trigger clear voice announcements via gTTS + pygame. Single audio queue prevents overlapping speech.</p>
+        </div>
+        <div class="feature-card">
+            <span class="feature-num">03</span>
+            <div class="feature-icon">⊞</div>
+            <div class="feature-title">Stability Filtering</div>
+            <p class="feature-desc">Signs must appear in 4 consecutive frames before an alert fires. Eliminates false positives from momentary flickers or misdetections.</p>
+        </div>
+        <div class="feature-card">
+            <span class="feature-num">04</span>
+            <div class="feature-icon">◎</div>
+            <div class="feature-title">Confidence Tiers</div>
+            <p class="feature-desc">Green boxes for high-confidence detections (speaks), orange for low-confidence (visual only). Dual threshold system keeps noise out.</p>
+        </div>
+        <div class="feature-card">
+            <span class="feature-num">05</span>
+            <div class="feature-icon">⟳</div>
+            <div class="feature-title">Smart Cooldown</div>
+            <p class="feature-desc">4-second cooldown per sign prevents repetitive announcements. Only the single highest-confidence stable sign is announced per frame cycle.</p>
+        </div>
+        <div class="feature-card">
+            <span class="feature-num">06</span>
+            <div class="feature-icon">▦</div>
+            <div class="feature-title">Live Dashboard</div>
+            <p class="feature-desc">Real-time FPS counter, detection log, confidence metrics, and uptime tracking. Flask-powered web interface accessible from any browser.</p>
+        </div>
+    </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- SIGNS SHOWCASE -->
+<section id="signs" class="signs-section">
+    <div class="section-label">Sign Classes</div>
+    <h2 class="section-title reveal">25 traffic sign categories</h2>
+
+    <div class="signs-marquee-wrap">
+        <div class="signs-row">
+            <!-- Row 1 duplicated for seamless loop -->
+            <div class="sign-chip warning"><span class="sign-chip-dot"></span>No Parking</div>
+            <div class="sign-chip danger"><span class="sign-chip-dot"></span>No Entry</div>
+            <div class="sign-chip info"><span class="sign-chip-dot"></span>Keep Right</div>
+            <div class="sign-chip info"><span class="sign-chip-dot"></span>Motor Vehicles Only</div>
+            <div class="sign-chip info"><span class="sign-chip-dot"></span>Bicycles Only</div>
+            <div class="sign-chip warning"><span class="sign-chip-dot"></span>Speed Limit 30</div>
+            <div class="sign-chip warning"><span class="sign-chip-dot"></span>Speed Limit 50</div>
+            <div class="sign-chip warning"><span class="sign-chip-dot"></span>Speed Limit 80</div>
+            <div class="sign-chip warning"><span class="sign-chip-dot"></span>Speed Limit 100</div>
+            <div class="sign-chip danger"><span class="sign-chip-dot"></span>No U Turn</div>
+            <div class="sign-chip danger"><span class="sign-chip-dot"></span>No Left Turn</div>
+            <div class="sign-chip danger"><span class="sign-chip-dot"></span>No Trucks</div>
+            <div class="sign-chip info"><span class="sign-chip-dot"></span>Pedestrian Crossing</div>
+            <!-- Duplicate -->
+            <div class="sign-chip warning"><span class="sign-chip-dot"></span>No Parking</div>
+            <div class="sign-chip danger"><span class="sign-chip-dot"></span>No Entry</div>
+            <div class="sign-chip info"><span class="sign-chip-dot"></span>Keep Right</div>
+            <div class="sign-chip info"><span class="sign-chip-dot"></span>Motor Vehicles Only</div>
+            <div class="sign-chip info"><span class="sign-chip-dot"></span>Bicycles Only</div>
+            <div class="sign-chip warning"><span class="sign-chip-dot"></span>Speed Limit 30</div>
+            <div class="sign-chip warning"><span class="sign-chip-dot"></span>Speed Limit 50</div>
+            <div class="sign-chip warning"><span class="sign-chip-dot"></span>Speed Limit 80</div>
+            <div class="sign-chip warning"><span class="sign-chip-dot"></span>Speed Limit 100</div>
+            <div class="sign-chip danger"><span class="sign-chip-dot"></span>No U Turn</div>
+            <div class="sign-chip danger"><span class="sign-chip-dot"></span>No Left Turn</div>
+            <div class="sign-chip danger"><span class="sign-chip-dot"></span>No Trucks</div>
+            <div class="sign-chip info"><span class="sign-chip-dot"></span>Pedestrian Crossing</div>
+        </div>
+        <div class="signs-row reverse">
+            <div class="sign-chip danger"><span class="sign-chip-dot"></span>No Horn</div>
+            <div class="sign-chip danger"><span class="sign-chip-dot"></span>No Motor Vehicles</div>
+            <div class="sign-chip info"><span class="sign-chip-dot"></span>Bicycles Keep Right</div>
+            <div class="sign-chip info"><span class="sign-chip-dot"></span>Motor Vehicles Keep Left</div>
+            <div class="sign-chip warning"><span class="sign-chip-dot"></span>Speed Limit 5</div>
+            <div class="sign-chip warning"><span class="sign-chip-dot"></span>Speed Limit 40</div>
+            <div class="sign-chip warning"><span class="sign-chip-dot"></span>Speed Limit 60</div>
+            <div class="sign-chip warning"><span class="sign-chip-dot"></span>Speed Limit 120</div>
+            <div class="sign-chip info"><span class="sign-chip-dot"></span>Minimum Speed 60</div>
+            <div class="sign-chip info"><span class="sign-chip-dot"></span>Minimum Speed 80</div>
+            <div class="sign-chip danger"><span class="sign-chip-dot"></span>No Motor Cars</div>
+            <div class="sign-chip info"><span class="sign-chip-dot"></span>Pedestrian Crossing Ahead</div>
+            <!-- Duplicate -->
+            <div class="sign-chip danger"><span class="sign-chip-dot"></span>No Horn</div>
+            <div class="sign-chip danger"><span class="sign-chip-dot"></span>No Motor Vehicles</div>
+            <div class="sign-chip info"><span class="sign-chip-dot"></span>Bicycles Keep Right</div>
+            <div class="sign-chip info"><span class="sign-chip-dot"></span>Motor Vehicles Keep Left</div>
+            <div class="sign-chip warning"><span class="sign-chip-dot"></span>Speed Limit 5</div>
+            <div class="sign-chip warning"><span class="sign-chip-dot"></span>Speed Limit 40</div>
+            <div class="sign-chip warning"><span class="sign-chip-dot"></span>Speed Limit 60</div>
+            <div class="sign-chip warning"><span class="sign-chip-dot"></span>Speed Limit 120</div>
+            <div class="sign-chip info"><span class="sign-chip-dot"></span>Minimum Speed 60</div>
+            <div class="sign-chip info"><span class="sign-chip-dot"></span>Minimum Speed 80</div>
+            <div class="sign-chip danger"><span class="sign-chip-dot"></span>No Motor Cars</div>
+            <div class="sign-chip info"><span class="sign-chip-dot"></span>Pedestrian Crossing Ahead</div>
+        </div>
+    </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- HOW IT WORKS -->
+<section id="how">
+    <div class="section-label">Pipeline</div>
+    <h2 class="section-title reveal">How it works</h2>
+
+    <div class="steps-grid reveal">
+        <div class="step">
+            <div class="step-number">01</div>
+            <div class="step-title">Capture</div>
+            <p class="step-desc">Webcam frame captured in real-time via OpenCV at native resolution</p>
+        </div>
+        <div class="step">
+            <div class="step-number">02</div>
+            <div class="step-title">Detect</div>
+            <p class="step-desc">YOLOv8 inference at 1024px with FP16 precision on CUDA GPU</p>
+        </div>
+        <div class="step">
+            <div class="step-number">03</div>
+            <div class="step-title">Filter</div>
+            <p class="step-desc">4-frame stability gate + 0.75 confidence threshold removes false positives</p>
+        </div>
+        <div class="step">
+            <div class="step-number">04</div>
+            <div class="step-title">Alert</div>
+            <p class="step-desc">Voice announcement via pygame + gTTS with 4s cooldown per sign class</p>
+        </div>
+    </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- TECH STACK -->
+<section class="tech-section">
+    <div class="section-label">Built With</div>
+    <h2 class="section-title reveal">Technology stack</h2>
+
+    <div class="tech-grid reveal">
+        <div class="tech-item">
+            <span class="tech-icon">⚡</span>
+            <div class="tech-name">YOLOv8</div>
+            <div class="tech-desc">Object Detection</div>
+        </div>
+        <div class="tech-item">
+            <span class="tech-icon">🔥</span>
+            <div class="tech-name">PyTorch</div>
+            <div class="tech-desc">Deep Learning</div>
+        </div>
+        <div class="tech-item">
+            <span class="tech-icon">👁</span>
+            <div class="tech-name">OpenCV</div>
+            <div class="tech-desc">Video Capture</div>
+        </div>
+        <div class="tech-item">
+            <span class="tech-icon">🌐</span>
+            <div class="tech-name">Flask</div>
+            <div class="tech-desc">Web Server</div>
+        </div>
+        <div class="tech-item">
+            <span class="tech-icon">🔊</span>
+            <div class="tech-name">Pygame</div>
+            <div class="tech-desc">Audio Engine</div>
+        </div>
+        <div class="tech-item">
+            <span class="tech-icon">🗣</span>
+            <div class="tech-name">gTTS</div>
+            <div class="tech-desc">Text To Speech</div>
+        </div>
+    </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+    <div class="cta-glow"></div>
+    <div class="reveal">
+        <h2>Ready to detect?</h2>
+        <p>Launch the live detection dashboard and start recognizing traffic signs in real-time.</p>
+        <a href="/dashboard" class="btn-primary" style="display:inline-flex;">
+            <span>▶</span> Open Dashboard
+        </a>
+    </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+    <div class="footer-brand">SignDetect</div>
+    <div class="footer-note">YOLOv8 · 25 Classes · Real-Time Neural Detection</div>
+    <div class="footer-note">Built with Flask + PyTorch</div>
+</footer>
+
+<script>
+    // Custom cursor
+    const cursor = document.getElementById('cursor');
+    const ring = document.getElementById('cursorRing');
+
+    document.addEventListener('mousemove', e => {
+        cursor.style.left = e.clientX + 'px';
+        cursor.style.top = e.clientY + 'px';
+        setTimeout(() => {
+            ring.style.left = e.clientX + 'px';
+            ring.style.top = e.clientY + 'px';
+        }, 80);
+    });
+
+    document.querySelectorAll('a, button').forEach(el => {
+        el.addEventListener('mouseenter', () => {
+            cursor.style.width = '6px';
+            cursor.style.height = '6px';
+            ring.style.width = '50px';
+            ring.style.height = '50px';
+            ring.style.opacity = '0.8';
+        });
+        el.addEventListener('mouseleave', () => {
+            cursor.style.width = '12px';
+            cursor.style.height = '12px';
+            ring.style.width = '36px';
+            ring.style.height = '36px';
+            ring.style.opacity = '0.5';
+        });
+    });
+
+    // Scroll reveal
+    const observer = new IntersectionObserver(entries => {
+        entries.forEach(e => {
+            if (e.isIntersecting) {
+                e.target.classList.add('visible');
+            }
+        });
+    }, { threshold: 0.1 });
+
+    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+
+</body>
+</html>
